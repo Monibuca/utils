@@ -1,0 +1,10 @@
+package utils
+
+func DeleteSliceItem[T interface{}](slice []T,item T) []T{
+	for i, val := range slice {
+		if val == item {
+			return append(slice[:i], slice[i+1:]...)
+		}
+	}
+	return slice
+}
