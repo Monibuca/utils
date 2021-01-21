@@ -81,6 +81,12 @@ func (r *Ring[T]) NextW() {
 	item.Done()
 }
 
+// NextR 读下一个
+func (r *Ring[T]) NextR(){
+	r.Current.Wait()
+	r.GoNext()
+}
+
 func (r *Ring[T]) GetBuffer() *bytes.Buffer {
 	if r.Current.Buffer == nil {
 		r.Current.Buffer = bytes.NewBuffer([]byte{})
