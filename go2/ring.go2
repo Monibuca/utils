@@ -83,8 +83,8 @@ func (r *Ring[T]) NextW() {
 
 // NextR 读下一个
 func (r *Ring[T]) NextR(){
-	r.Current.Wait()
 	r.GoNext()
+	r.Current.Wait()
 }
 
 func (r *Ring[T]) GetBuffer() *bytes.Buffer {
