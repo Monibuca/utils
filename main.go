@@ -13,7 +13,7 @@ import (
 )
 
 // ListenAddrs Listen http and https
-func ListenAddrs(addr, addTLS, cert, key string, handler http.HandlerFunc) {
+func ListenAddrs(addr, addTLS, cert, key string, handler http.Handler) {
 	var g errgroup.Group
 	if addTLS != "" {
 		g.Go(func() error {
