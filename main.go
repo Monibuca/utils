@@ -28,6 +28,16 @@ func ListenAddrs(addr, addTLS, cert, key string, handler http.Handler) {
 	}
 }
 
+func CORS(w http.ResponseWriter, r *http.Request){
+	w.Header().Set("Access-Control-Allow-Credentials", "true")
+	origin := r.Header["Origin"]
+	if len(origin) == 0 {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+	} else {
+		w.Header().Set("Access-Control-Allow-Origin", origin[0])
+	}
+}
+
 // 检查文件或目录是否存在
 // 如果由 filename 指定的文件或目录存在则返回 true，否则返回 false
 func Exist(filename string) bool {

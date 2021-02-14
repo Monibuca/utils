@@ -1,8 +1,9 @@
 package codec
 
 import (
-	"github.com/Monibuca/utils/v3"
 	"io"
+
+	"github.com/Monibuca/utils/v3"
 )
 
 const (
@@ -13,6 +14,11 @@ const (
 )
 
 var (
+	Codec2SoundFormat = map[string]byte{
+		"aac":  10,
+		"pcma": 7,
+		"pcmu": 8,
+	}
 	// 音频格式. 4 bit
 	SoundFormat = map[byte]string{
 		0:  "Linear PCM, platform endian",
@@ -69,29 +75,29 @@ var (
 
 var FLVHeader = []byte{0x46, 0x4c, 0x56, 0x01, 0x05, 0, 0, 0, 9, 0, 0, 0, 0}
 
-//func WriteFLVTag(w io.Writer, tag *SendPacket) (err error) {
-//	head := pool.GetSlice(11)
-//	defer pool.RecycleSlice(head)
-//	tail := pool.GetSlice(4)
-//	defer pool.RecycleSlice(tail)
-//	head[0] = tag.Type
-//	dataSize := uint32(len(tag.Payload))
-//	util.BigEndian.PutUint32(tail, dataSize+11)
-//	util.BigEndian.PutUint24(head[1:], dataSize)
-//	util.BigEndian.PutUint24(head[4:], tag.Timestamp)
-//	util.BigEndian.PutUint32(head[7:], 0)
-//	if _, err = w.Write(head); err != nil {
-//		return
-//	}
-//	// Tag Data
-//	if _, err = w.Write(tag.Payload); err != nil {
-//		return
-//	}
-//	if _, err = w.Write(tail); err != nil { // PreviousTagSizeN(4)
-//		return
-//	}
-//	return
-//}
+func WriteFLVTag(w io.Writer, t byte, timestamp uint32, payload []byte) (err error) {
+	head := utils.GetSlice(11)
+	defer utils.RecycleSlice(head)
+	tail := utils.GetSlice(4)
+	defer utils.RecycleSlice(tail)
+	head[0] = t
+	dataSize := uint32(len(payload))
+	utils.BigEndian.PutUint32(tail, dataSize+11)
+	utils.BigEndian.PutUint24(head[1:], dataSize)
+	utils.BigEndian.PutUint24(head[4:], timestamp)
+	utils.BigEndian.PutUint32(head[7:], 0)
+	if _, err = w.Write(head); err != nil {
+		return
+	}
+	// Tag Data
+	if _, err = w.Write(payload); err != nil {
+		return
+	}
+	if _, err = w.Write(tail); err != nil { // PreviousTagSizeN(4)
+		return
+	}
+	return
+}
 func ReadFLVTag(r io.Reader) (t byte, timestamp uint32, payload []byte, err error) {
 	head := utils.GetSlice(11)
 	defer utils.RecycleSlice(head)
@@ -108,4 +114,31 @@ func ReadFLVTag(r io.Reader) (t byte, timestamp uint32, payload []byte, err erro
 		utils.RecycleSlice(t)
 	}
 	return
+}
+func Nalu2RTMPTag(nalu []byte) []byte {
+	payload := utils.GetSlice(9 + len(nalu))
+	if nalu[0]&31 == NALU_IDR_Picture {
+		payload[0] = 0x17
+	} else {
+		payload[0] = 0x27
+	}
+	payload[1] = 0x01
+	utils.BigEndian.PutUint32(payload[5:], uint32(len(nalu)))
+	copy(payload[9:], nalu)
+	return payload
+}
+func Audio2RTMPTag(aac byte, audio []byte) []byte {
+	l := len(audio) + 1
+	if aac != 0 {
+		l++
+	}
+	payload := utils.GetSlice(l)
+	payload[0] = aac
+	if aac != 0 {
+		payload[1] = 1
+		copy(payload[2:], audio)
+	} else {
+		copy(payload[1:], audio)
+	}
+	return payload
 }
