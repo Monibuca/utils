@@ -2,6 +2,7 @@ package codec
 
 import (
 	"errors"
+
 	"github.com/Monibuca/utils/v3"
 )
 
@@ -307,5 +308,23 @@ func AudioSpecificConfigToADTS(asc AudioSpecificConfig, rawDataLength int) (adts
 	// ADTSBufferFullness(11)(取低6位) + NumberOfRawDataBlockInFrame(2)
 	adtsByte = append(adtsByte, 0xfc)
 
+	return
+}
+func ParseRTPAAC(payload []byte) (result [][]byte) {
+	auHeaderLen := (int16(payload[0]) << 8) + int16(payload[1])
+	auHeaderLen = auHeaderLen >> 3
+	auHeaderCount := int(auHeaderLen / 2)
+	var auLenArray []int
+	for iIndex := 0; iIndex < int(auHeaderCount); iIndex++ {
+		auHeaderInfo := (int16(payload[2+2*iIndex]) << 8) + int16(payload[2+2*iIndex+1])
+		auLen := auHeaderInfo >> 3
+		auLenArray = append(auLenArray, int(auLen))
+	}
+	startOffset := 2 + 2*auHeaderCount
+	for _, auLen := range auLenArray {
+		endOffset := startOffset + auLen
+		result = append(result, payload[startOffset:endOffset])
+		startOffset = startOffset + auLen
+	}
 	return
 }

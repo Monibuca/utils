@@ -115,30 +115,3 @@ func ReadFLVTag(r io.Reader) (t byte, timestamp uint32, payload []byte, err erro
 	}
 	return
 }
-func Nalu2RTMPTag(nalu []byte) []byte {
-	payload := utils.GetSlice(9 + len(nalu))
-	if nalu[0]&31 == NALU_IDR_Picture {
-		payload[0] = 0x17
-	} else {
-		payload[0] = 0x27
-	}
-	payload[1] = 0x01
-	utils.BigEndian.PutUint32(payload[5:], uint32(len(nalu)))
-	copy(payload[9:], nalu)
-	return payload
-}
-func Audio2RTMPTag(aac byte, audio []byte) []byte {
-	l := len(audio) + 1
-	if aac != 0 {
-		l++
-	}
-	payload := utils.GetSlice(l)
-	payload[0] = aac
-	if aac != 0 {
-		payload[1] = 1
-		copy(payload[2:], audio)
-	} else {
-		copy(payload[1:], audio)
-	}
-	return payload
-}

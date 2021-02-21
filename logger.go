@@ -2,48 +2,34 @@ package utils
 
 import (
 	"fmt"
-	colorable "github.com/mattn/go-colorable"
 	"io"
 	"log"
 	"os"
-	"sync"
+
+	colorable "github.com/mattn/go-colorable"
 
 	"github.com/logrusorgru/aurora"
 )
 
-// LogWriter 多端写日志类
-type LogWriter struct {
-	*MultiLogWriter
-}
+// MultiLogWriter 多端写日志类
 type MultiLogWriter struct {
-	sync.Map
+	writers []io.Writer
+	io.Writer
 }
 
-var logWriter = &LogWriter{new(MultiLogWriter)}
-var multiLogger = log.New(logWriter.MultiLogWriter, "", log.LstdFlags)
+var logWriter MultiLogWriter
+var multiLogger = log.New(&logWriter, "", log.LstdFlags)
 var colorLogger = log.New(colorable.NewColorableStdout(), "", log.LstdFlags)
 
 func init() {
-	log.SetOutput(logWriter)
-}
-func (w *LogWriter) Write(data []byte) (n int, err error) {
-	os.Stdout.Write(data)
-	return w.MultiLogWriter.Write(data)
-}
-func (w *MultiLogWriter) Write(data []byte) (n int, err error) {
-	w.Range(func(k, v interface{}) bool {
-		n, err = k.(io.Writer).Write(data)
-		if err != nil {
-			w.Delete(k)
-		}
-		return true
-	})
-	return
+	log.SetOutput(io.MultiWriter(os.Stdout, &logWriter))
+	logWriter.Writer = io.MultiWriter()
 }
 
 // AddWriter 添加日志输出端
 func AddWriter(wn io.Writer) {
-	logWriter.Store(wn, wn)
+	logWriter.writers = append(logWriter.writers, wn)
+	logWriter.Writer = io.MultiWriter(logWriter.writers...)
 }
 
 // MayBeError 优雅错误判断加日志辅助函数
