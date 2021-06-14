@@ -2,9 +2,11 @@ package codec
 
 import (
 	"bytes"
+	"errors"
 	"io"
 
 	"github.com/Monibuca/utils/v3"
+	"github.com/Monibuca/utils/v3/bits/pio"
 )
 
 // Start Code + NAL Unit -> NALU Header + NALU Body
@@ -18,32 +20,35 @@ import (
 
 const (
 	// NALU Type
-	NALU_Unspecified           = 0
-	NALU_Non_IDR_Picture       = 1
-	NALU_Data_Partition_A      = 2
-	NALU_Data_Partition_B      = 3
-	NALU_Data_Partition_C      = 4
-	NALU_IDR_Picture           = 5
-	NALU_SEI                   = 6
-	NALU_SPS                   = 7
-	NALU_PPS                   = 8
-	NALU_Access_Unit_Delimiter = 9
-	NALU_Sequence_End          = 10
-	NALU_Stream_End            = 11
-	NALU_Filler_Data           = 12
-	NALU_SPS_Extension         = 13
-	NALU_Prefix                = 14
-	NALU_SPS_Subset            = 15
-	NALU_DPS                   = 16
-	NALU_Reserved1             = 17
-	NALU_Reserved2             = 18
-	NALU_Not_Auxiliary_Coded   = 19
-	NALU_Coded_Slice_Extension = 20
-	NALU_Reserved3             = 21
-	NALU_Reserved4             = 22
-	NALU_Reserved5             = 23
-	NALU_STAPA                 = 24
-	NALU_FUA                   = 28
+	NALU_Unspecified           byte = iota
+	NALU_Non_IDR_Picture            // 1
+	NALU_Data_Partition_A           // 2
+	NALU_Data_Partition_B           // 3
+	NALU_Data_Partition_C           // 4
+	NALU_IDR_Picture                // 5
+	NALU_SEI                        // 6
+	NALU_SPS                        // 7
+	NALU_PPS                        // 8
+	NALU_Access_Unit_Delimiter      // 9
+	NALU_Sequence_End               // 10
+	NALU_Stream_End                 // 11
+	NALU_Filler_Data                // 12
+	NALU_SPS_Extension              // 13
+	NALU_Prefix                     // 14
+	NALU_SPS_Subset                 // 15
+	NALU_DPS                        // 16
+	NALU_Reserved1                  // 17
+	NALU_Reserved2                  // 18
+	NALU_Not_Auxiliary_Coded        // 19
+	NALU_Coded_Slice_Extension      // 20
+	NALU_Reserved3                  // 21
+	NALU_Reserved4                  // 22
+	NALU_Reserved5                  // 23
+	NALU_STAPA                      // 24
+	_
+	_
+	_
+	NALU_FUA // 28
 	// 24 - 31 NALU_NotReserved
 
 )
@@ -81,101 +86,122 @@ func SplitH264(payload []byte) (nalus [][]byte) {
 	return
 }
 
-type H264 struct {
-	SPS []byte
-	PPS []byte
+func BuildH264SeqHeaderFromSpsPps(sps, pps []byte) (seqHeader []byte) {
+	lenSPS, lenPPS := len(sps), len(pps)
+	seqHeader = append([]byte{}, RTMP_AVC_HEAD...)
+	copy(seqHeader[6:], sps[1:4])
+	seqHeader = append(seqHeader, 0xE1, byte(lenSPS>>8), byte(lenSPS))
+	seqHeader = append(seqHeader, sps...)
+	seqHeader = append(append(seqHeader, 0x01, byte(lenPPS>>8), byte(lenPPS)), pps...)
+	return
 }
 
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
+// ISO/IEC 14496-15 11(16)/page
+//
+// Advanced Video Coding
+//
+
+// AVCC
+type AVCDecoderConfigurationRecord struct {
+	ConfigurationVersion       byte // 8 bits Version
+	AVCProfileIndication       byte // 8 bits
+	ProfileCompatibility       byte // 8 bits
+	AVCLevelIndication         byte // 8 bits
+	Reserved1                  byte // 6 bits
+	LengthSizeMinusOne         byte // 2 bits 非常重要,每个NALU包前面都(lengthSizeMinusOne & 3)+1个字节的NAL包长度描述
+	Reserved2                  byte // 3 bits
+	NumOfSequenceParameterSets byte // 5 bits SPS 的个数,计算方法是 numOfSequenceParameterSets & 0x1F
+	NumOfPictureParameterSets  byte // 8 bits PPS 的个数
+
+	SequenceParameterSetLength  uint16 // 16 byte SPS Length
+	SequenceParameterSetNALUnit []byte // n byte  SPS
+	PictureParameterSetLength   uint16 // 16 byte PPS Length
+	PictureParameterSetNALUnit  []byte // n byte  PPS
 }
 
-//Payload 分包，用于RTP传输
-func (h264 *H264) Payload(mtu int, payload []byte) (payloads [][]byte) {
-	if payload == nil {
-		return payloads
+func (p *AVCDecoderConfigurationRecord) Marshal(b []byte) (n int) {
+	b[0] = 1
+	b[1] = p.AVCProfileIndication
+	b[2] = p.ProfileCompatibility
+	b[3] = p.AVCLevelIndication
+	b[4] = p.LengthSizeMinusOne | 0xfc
+	b[5] = uint8(1) | 0xe0
+	n += 6
+
+	pio.PutU16BE(b[n:], p.SequenceParameterSetLength)
+	n += 2
+	copy(b[n:], p.SequenceParameterSetNALUnit)
+	n += len(p.SequenceParameterSetNALUnit)
+	b[n] = uint8(1)
+	n++
+
+	pio.PutU16BE(b[n:],  p.PictureParameterSetLength)
+	n += 2
+	copy(b[n:], p.PictureParameterSetNALUnit)
+	n += len(p.PictureParameterSetNALUnit)
+
+	return
+}
+
+var ErrDecconfInvalid = errors.New("decode error")
+
+func (p *AVCDecoderConfigurationRecord) Unmarshal(b []byte) (n int, err error) {
+	if len(b) < 7 {
+		err = errors.New("not enough len")
+		return
 	}
-	videoFrameType := payload[0] >> 4
-	if videoFrameType == 1 || videoFrameType == 4 {
-		payloads = append(payloads, h264.SPS, h264.PPS)
+
+	p.AVCProfileIndication = b[1]
+	p.ProfileCompatibility = b[2]
+	p.AVCLevelIndication = b[3]
+	p.LengthSizeMinusOne = b[4] & 0x03
+	spscount := int(b[5] & 0x1f)
+	n += 6
+	var sps, pps [][]byte
+	for i := 0; i < spscount; i++ {
+		if len(b) < n+2 {
+			err = ErrDecconfInvalid
+			return
+		}
+		spslen := int(utils.BigEndian.Uint16(b[n:]))
+		n += 2
+
+		if len(b) < n+spslen {
+			err = ErrDecconfInvalid
+			return
+		}
+		sps = append(sps, b[n:n+spslen])
+		n += spslen
 	}
-	for nalu, naluLen := payload[5:], 4; len(nalu) > naluLen; naluLen = int(utils.BigEndian.Uint32(nalu)) + 4 {
-		nalu = nalu[naluLen:]
-		naluType := nalu[0] & 0x1F   //00011111
-		naluRefIdc := nalu[0] & 0x60 //1110000
+	p.SequenceParameterSetLength = uint16(len(sps[0]))
+	p.SequenceParameterSetNALUnit = sps[0]
+	if len(b) < n+1 {
+		err = ErrDecconfInvalid
+		return
+	}
+	ppscount := int(b[n])
+	n++
 
-		if naluType == 9 || naluType == 12 {
-			continue
+	for i := 0; i < ppscount; i++ {
+		if len(b) < n+2 {
+			err = ErrDecconfInvalid
+			return
 		}
+		ppslen := int(utils.BigEndian.Uint16(b[n:]))
+		n += 2
 
-		// Single NALU
-		if len(nalu) <= mtu {
-			out := make([]byte, len(nalu))
-			copy(out, nalu)
-			payloads = append(payloads, out)
-			continue
+		if len(b) < n+ppslen {
+			err = ErrDecconfInvalid
+			return
 		}
-
-		// FU-A
-		maxFragmentSize := mtu - 2
-
-		// The FU payload consists of fragments of the payload of the fragmented
-		// NAL unit so that if the fragmentation unit payloads of consecutive
-		// FUs are sequentially concatenated, the payload of the fragmented NAL
-		// unit can be reconstructed.  The NAL unit type octet of the fragmented
-		// NAL unit is not included as such in the fragmentation unit payload,
-		// 	but rather the information of the NAL unit type octet of the
-		// fragmented NAL unit is conveyed in the F and NRI fields of the FU
-		// indicator octet of the fragmentation unit and in the type field of
-		// the FU header.  An FU payload MAY have any number of octets and MAY
-		// be empty.
-
-		naluData := nalu
-		// According to the RFC, the first octet is skipped due to redundant information
-		naluDataIndex := 1
-		naluDataLength := len(nalu) - naluDataIndex
-		naluDataRemaining := naluDataLength
-
-		if min(maxFragmentSize, naluDataRemaining) <= 0 {
-			continue
-		}
-
-		for naluDataRemaining > 0 {
-			currentFragmentSize := min(maxFragmentSize, naluDataRemaining)
-			out := make([]byte, 2+currentFragmentSize)
-
-			// +---------------+
-			// |0|1|2|3|4|5|6|7|
-			// +-+-+-+-+-+-+-+-+
-			// |F|NRI|  Type   |
-			// +---------------+
-			out[0] = NALU_FUA | naluRefIdc
-
-			// +---------------+
-			//|0|1|2|3|4|5|6|7|
-			//+-+-+-+-+-+-+-+-+
-			//|S|E|R|  Type   |
-			//+---------------+
-
-			out[1] = naluType
-			if naluDataRemaining == naluDataLength {
-				// Set start bit
-				out[1] |= 1 << 7
-			} else if naluDataRemaining-currentFragmentSize == 0 {
-				// Set end bit
-				out[1] |= 1 << 6
-			}
-
-			copy(out[2:], naluData[naluDataIndex:naluDataIndex+currentFragmentSize])
-			payloads = append(payloads, out)
-
-			naluDataRemaining -= currentFragmentSize
-			naluDataIndex += currentFragmentSize
-		}
-
+		pps = append(pps, b[n:n+ppslen])
+		n += ppslen
+	}
+	if ppscount >= 1 {
+		p.PictureParameterSetLength = uint16(len(pps[0]))
+		p.PictureParameterSetNALUnit = pps[0]
+	} else {
+		err = ErrDecconfInvalid
 	}
 	return
 }

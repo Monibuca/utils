@@ -2,126 +2,12 @@ package codec
 
 import (
 	"errors"
-
-	"github.com/Monibuca/utils/v3"
 )
 
 const (
 	ADTS_HEADER_SIZE = 7
 )
 
-// ISO/IEC 14496-15 11(16)/page
-//
-// Advanced Video Coding
-//
-
-type AVCDecoderConfigurationRecord struct {
-	ConfigurationVersion       byte // 8 bits Version
-	AVCProfileIndication       byte // 8 bits
-	ProfileCompatibility       byte // 8 bits
-	AVCLevelIndication         byte // 8 bits
-	Reserved1                  byte // 6 bits
-	LengthSizeMinusOne         byte // 2 bits 非常重要,每个NALU包前面都(lengthSizeMinusOne & 3)+1个字节的NAL包长度描述
-	Reserved2                  byte // 3 bits
-	NumOfSequenceParameterSets byte // 5 bits SPS 的个数,计算方法是 numOfSequenceParameterSets & 0x1F
-	NumOfPictureParameterSets  byte // 8 bits PPS 的个数
-
-	SequenceParameterSetLength  uint16 // 16 byte SPS Length
-	SequenceParameterSetNALUnit []byte // n byte  SPS
-	PictureParameterSetLength   uint16 // 16 byte PPS Length
-	PictureParameterSetNALUnit  []byte // n byte  PPS
-}
-
-//func (p *AVCDecoderConfigurationRecord) Marshal(b []byte) (n int) {
-//	b[0] = 1
-//	b[1] = p.AVCProfileIndication
-//	b[2] = p.ProfileCompatibility
-//	b[3] = p.AVCLevelIndication
-//	b[4] = p.LengthSizeMinusOne | 0xfc
-//	b[5] = uint8(len(p.SPS)) | 0xe0
-//	n += 6
-//
-//	for _, sps := range p.SPS {
-//		pio.PutU16BE(b[n:], uint16(len(sps)))
-//		n += 2
-//		copy(b[n:], sps)
-//		n += len(sps)
-//	}
-//
-//	b[n] = uint8(len(p.PPS))
-//	n++
-//
-//	for _, pps := range p.PPS {
-//		pio.PutU16BE(b[n:], uint16(len(pps)))
-//		n += 2
-//		copy(b[n:], pps)
-//		n += len(pps)
-//	}
-//
-//	return
-//}
-var ErrDecconfInvalid = errors.New("decode error")
-
-func (p *AVCDecoderConfigurationRecord) Unmarshal(b []byte) (n int, err error) {
-	if len(b) < 7 {
-		err = errors.New("not enough len")
-		return
-	}
-
-	p.AVCProfileIndication = b[1]
-	p.ProfileCompatibility = b[2]
-	p.AVCLevelIndication = b[3]
-	p.LengthSizeMinusOne = b[4] & 0x03
-	spscount := int(b[5] & 0x1f)
-	n += 6
-	var sps, pps [][]byte
-	for i := 0; i < spscount; i++ {
-		if len(b) < n+2 {
-			err = ErrDecconfInvalid
-			return
-		}
-		spslen := int(utils.BigEndian.Uint16(b[n:]))
-		n += 2
-
-		if len(b) < n+spslen {
-			err = ErrDecconfInvalid
-			return
-		}
-		sps = append(sps, b[n:n+spslen])
-		n += spslen
-	}
-	p.SequenceParameterSetLength = uint16(len(sps[0]))
-	p.SequenceParameterSetNALUnit = sps[0]
-	if len(b) < n+1 {
-		err = ErrDecconfInvalid
-		return
-	}
-	ppscount := int(b[n])
-	n++
-
-	for i := 0; i < ppscount; i++ {
-		if len(b) < n+2 {
-			err = ErrDecconfInvalid
-			return
-		}
-		ppslen := int(utils.BigEndian.Uint16(b[n:]))
-		n += 2
-
-		if len(b) < n+ppslen {
-			err = ErrDecconfInvalid
-			return
-		}
-		pps = append(pps, b[n:n+ppslen])
-		n += ppslen
-	}
-	if ppscount >= 1 {
-		p.PictureParameterSetLength = uint16(len(pps[0]))
-		p.PictureParameterSetNALUnit = pps[0]
-	} else {
-		err = ErrDecconfInvalid
-	}
-	return
-}
 
 // ISO/IEC 14496-3 38(52)/page
 //
