@@ -45,10 +45,11 @@ const (
 	NALU_Reserved4                  // 22
 	NALU_Reserved5                  // 23
 	NALU_STAPA                      // 24
-	_
-	_
-	_
+	NALU_STAPB
+	MTAP16
+	MTAP24
 	NALU_FUA // 28
+	NALU_FUB
 	// 24 - 31 NALU_NotReserved
 
 )
@@ -135,7 +136,7 @@ func (p *AVCDecoderConfigurationRecord) Marshal(b []byte) (n int) {
 	b[n] = uint8(1)
 	n++
 
-	pio.PutU16BE(b[n:],  p.PictureParameterSetLength)
+	pio.PutU16BE(b[n:], p.PictureParameterSetLength)
 	n += 2
 	copy(b[n:], p.PictureParameterSetNALUnit)
 	n += len(p.PictureParameterSetNALUnit)
