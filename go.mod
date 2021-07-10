@@ -3,6 +3,7 @@ module github.com/Monibuca/utils/v3
 go 1.13
 
 require (
+	github.com/cnotch/ipchub v1.1.0
 	github.com/funny/slab v0.0.0-20180511031532-b1fad5e5d478
 	github.com/funny/utest v0.0.0-20161029064919-43870a374500 // indirect
 	github.com/logrusorgru/aurora v2.0.3+incompatible

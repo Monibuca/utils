@@ -3,6 +3,8 @@ package codec
 import (
 	"bytes"
 
+	"github.com/cnotch/ipchub/av/codec/hevc"
+
 	"github.com/Monibuca/utils/v3/bits"
 )
 
@@ -211,5 +213,15 @@ func ParseSPS(data []byte) (self SPSInfo, err error) {
 	self.Width = (self.MbWidth * 16) - self.CropLeft*2 - self.CropRight*2
 	self.Height = ((2 - frame_mbs_only_flag) * self.MbHeight * 16) - self.CropTop*2 - self.CropBottom*2
 
+	return
+}
+
+func ParseHevcSPS(data []byte) (self SPSInfo, err error) {
+	var rawsps hevc.H265RawSPS
+	if err = rawsps.Decode(data); err == nil {
+		self.CropLeft, self.CropRight, self.CropTop, self.CropBottom = uint(rawsps.Conf_win_left_offset), uint(rawsps.Conf_win_right_offset), uint(rawsps.Conf_win_top_offset), uint(rawsps.Conf_win_bottom_offset)
+		self.Width = uint(rawsps.Pic_width_in_luma_samples)
+		self.Height = uint(rawsps.Pic_height_in_luma_samples)
+	}
 	return
 }
