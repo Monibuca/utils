@@ -84,8 +84,15 @@ func WriteFLVTag(w io.Writer, t byte, timestamp uint32, payload []byte) (err err
 	dataSize := uint32(len(payload))
 	utils.BigEndian.PutUint32(tail, dataSize+11)
 	utils.BigEndian.PutUint24(head[1:], dataSize)
-	utils.BigEndian.PutUint24(head[4:], timestamp)
-	utils.BigEndian.PutUint32(head[7:], 0)
+	if timestamp > 0xFFFFFF {
+		head[4] = 0xFF
+		head[5] = 0xFF
+		head[6] = 0xFF
+		head[7] = byte(timestamp >> 24)
+	} else {
+		utils.BigEndian.PutUint24(head[4:], timestamp)
+		utils.BigEndian.PutUint32(head[7:], 0)
+	}
 	if _, err = w.Write(head); err != nil {
 		return
 	}
@@ -106,7 +113,12 @@ func ReadFLVTag(r io.Reader) (t byte, timestamp uint32, payload []byte, err erro
 	}
 	t = head[0]
 	dataSize := utils.BigEndian.Uint24(head[1:])
-	timestamp = utils.BigEndian.Uint24(head[4:])
+	if head[7] == 0 {
+		timestamp = utils.BigEndian.Uint24(head[4:])
+	} else {
+		timestamp = (uint32(head[7]) << 24) + 0xFFFFFF
+
+	}
 	payload = make([]byte, int(dataSize))
 	if _, err = io.ReadFull(r, payload); err == nil {
 		t := utils.GetSlice(4)
