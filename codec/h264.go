@@ -46,8 +46,8 @@ const (
 	NALU_Reserved5                  // 23
 	NALU_STAPA                      // 24
 	NALU_STAPB
-	MTAP16
-	MTAP24
+	NALU_MTAP16
+	NALU_MTAP24
 	NALU_FUA // 28
 	NALU_FUB
 	// 24 - 31 NALU_NotReserved
