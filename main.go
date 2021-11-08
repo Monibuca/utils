@@ -4,10 +4,12 @@ import (
 	"bufio"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
+	"time"
 
 	"golang.org/x/sync/errgroup"
 )
@@ -28,7 +30,55 @@ func ListenAddrs(addr, addTLS, cert, key string, handler http.Handler) {
 	}
 }
 
-func CORS(w http.ResponseWriter, r *http.Request){
+func ListenTCP(addr string, process func(net.Conn)) error {
+	listener, err := net.Listen("tcp", addr)
+	if err != nil {
+		return err
+	}
+	var tempDelay time.Duration
+	for {
+		conn, err := listener.Accept()
+		conn.(*net.TCPConn).SetNoDelay(false)
+		if err != nil {
+			if ne, ok := err.(net.Error); ok && ne.Temporary() {
+				if tempDelay == 0 {
+					tempDelay = 5 * time.Millisecond
+				} else {
+					tempDelay *= 2
+				}
+				if max := 1 * time.Second; tempDelay > max {
+					tempDelay = max
+				}
+				Printf("%s: Accept error: %v; retrying in %v", addr, err, tempDelay)
+				time.Sleep(tempDelay)
+				continue
+			}
+			return err
+		}
+		tempDelay = 0
+		go process(conn)
+	}
+}
+
+func ListenUDP(address string, networkBuffer int) (*net.UDPConn, error) {
+	addr, err := net.ResolveUDPAddr("udp", address)
+	if err != nil {
+		log.Fatalf("udp server ResolveUDPAddr :%s error, %v", address, err)
+	}
+	conn, err := net.ListenUDP("udp", addr)
+	if err != nil {
+		log.Fatalf("udp server ListenUDP :%s error, %v", address, err)
+	}
+	if err = conn.SetReadBuffer(networkBuffer); err != nil {
+		Printf("udp server video conn set read buffer error, %v", err)
+	}
+	if err = conn.SetWriteBuffer(networkBuffer); err != nil {
+		Printf("udp server video conn set write buffer error, %v", err)
+	}
+	return conn, err
+}
+
+func CORS(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Credentials", "true")
 	origin := r.Header["Origin"]
 	if len(origin) == 0 {

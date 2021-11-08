@@ -1,10 +1,12 @@
 package utils
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"log"
 	"os"
+	"time"
 
 	colorable "github.com/mattn/go-colorable"
 
@@ -70,4 +72,16 @@ func Println(v ...interface{}) {
 	noColor := getNoColor(v...)
 	colorLogger.Output(2, fmt.Sprintln(v...))
 	multiLogger.Output(2, fmt.Sprintln(noColor...))
+}
+
+type Event struct {
+	Timestamp time.Time
+	Level     int
+	Label     string
+	Tag       string
+}
+type EventContext struct {
+	Name string
+	context.Context
+	EventChan chan *Event
 }
