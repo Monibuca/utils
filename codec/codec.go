@@ -6,8 +6,12 @@ import (
 
 const (
 	ADTS_HEADER_SIZE = 7
+	CodecID_AAC      = 0xA
+	CodecID_PCMA     = 7
+	CodecID_PCMU		 = 8
+	CodecID_H264		 = 7
+	CodecID_H265		 = 0xC
 )
-
 
 // ISO/IEC 14496-3 38(52)/page
 //
