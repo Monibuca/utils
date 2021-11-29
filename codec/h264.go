@@ -90,7 +90,9 @@ func SplitH264(payload []byte) (nalus [][]byte) {
 func BuildH264SeqHeaderFromSpsPps(sps, pps []byte) (seqHeader []byte) {
 	lenSPS, lenPPS := len(sps), len(pps)
 	seqHeader = append([]byte{}, RTMP_AVC_HEAD...)
-	copy(seqHeader[6:], sps[1:4])
+	if lenSPS > 3 {
+		copy(seqHeader[6:], sps[1:4])
+	}
 	seqHeader = append(seqHeader, 0xE1, byte(lenSPS>>8), byte(lenSPS))
 	seqHeader = append(seqHeader, sps...)
 	seqHeader = append(append(seqHeader, 0x01, byte(lenPPS>>8), byte(lenPPS)), pps...)
