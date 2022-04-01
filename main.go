@@ -38,7 +38,6 @@ func ListenTCP(addr string, process func(net.Conn)) error {
 	var tempDelay time.Duration
 	for {
 		conn, err := listener.Accept()
-		conn.(*net.TCPConn).SetNoDelay(false)
 		if err != nil {
 			if ne, ok := err.(net.Error); ok && ne.Temporary() {
 				if tempDelay == 0 {
@@ -55,6 +54,7 @@ func ListenTCP(addr string, process func(net.Conn)) error {
 			}
 			return err
 		}
+		conn.(*net.TCPConn).SetNoDelay(false)
 		tempDelay = 0
 		go process(conn)
 	}
